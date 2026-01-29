@@ -1,6 +1,7 @@
 import numpy as np
 import fiftyone as fo
 import fiftyone.operators as foo
+from fiftyone.operators import types
 
 
 class NormalizedClickDistance(foo.EvaluationMetric):
@@ -9,37 +10,54 @@ class NormalizedClickDistance(foo.EvaluationMetric):
         return foo.EvaluationMetricConfig(
             name="normalized_click_distance",
             label="Normalized Click Distance",
-            description="Normalized Euclidean distance between predicted and ground truth click points (as % of diagonal)",
+            description="Normalized Euclidean distance between predicted and ground truth click points",
             aggregate_key="mean_norm_dist",
             unlisted=False,
         )
+
+    def resolve_input(self, ctx, inputs):
+        inputs = types.Object()
+        inputs.str(
+            "pred_field",
+            label="Prediction field",
+            description="Field containing predicted (x, y) coordinates [0-1]",
+            default="pred_point",
+            required=True,
+        )
+        inputs.str(
+            "gt_field",
+            label="Ground truth field",
+            description="Field containing ground truth (x, y) coordinates [0-1]",
+            default="gt_point",
+            required=True,
+        )
+        inputs.list(
+            "thresholds",
+            types.Float(),
+            label="Accuracy thresholds",
+            description="Thresholds as fraction of diagonal for Acc@ metrics",
+            default=[0.025, 0.05, 0.10],
+        )
+        return types.Property(inputs)
 
     def compute(
         self,
         samples,
         results,
-        pred_field="predicted_keypoints",
-        gt_field="keypoints",
+        pred_field="pred_point",
+        gt_field="gt_point",
         thresholds=None,
     ):
-        """
-        Args:
-            samples: FiftyOne samples view
-            results: Evaluation results object
-            pred_field: Field with predicted (x, y) in [0-1] normalized coords
-            gt_field: Field with ground truth (x, y) in [0-1] normalized coords
-            thresholds: List of accuracy thresholds as fraction of diagonal
-        """
         if thresholds is None:
             thresholds = [0.025, 0.05, 0.10]
 
         dataset = samples._dataset
         eval_key = results.key
-        distance_field = f"{eval_key}_{self.config.name}"
+        metric_field = f"{eval_key}_{self.config.name}"
 
-        # Add per-sample distance field
-        if distance_field not in dataset.get_field_schema():
-            dataset.add_sample_field(distance_field, fo.FloatField)
+        # Add per-sample field
+        if metric_field not in dataset.get_field_schema():
+            dataset.add_sample_field(metric_field, fo.FloatField)
 
         distances = []
 
@@ -48,25 +66,25 @@ class NormalizedClickDistance(foo.EvaluationMetric):
             gt = sample[gt_field]
 
             if pred is None or gt is None:
-                sample[distance_field] = None
+                sample[metric_field] = None
                 sample.save()
                 continue
 
-            # Handle if stored as list, tuple, or keypoint
+            # Handle fo.Keypoint if needed
             if hasattr(pred, "points"):
-                pred = pred.points[0]  # fo.Keypoint
+                pred = pred.points[0]
             if hasattr(gt, "points"):
                 gt = gt.points[0]
 
-            pred_arr = np.array(pred[:2])  # Take x, y only
+            pred_arr = np.array(pred[:2])
             gt_arr = np.array(gt[:2])
 
-            # Euclidean in normalized [0-1] space, divide by diagonal (sqrt(2))
+            # Normalize by diagonal of unit square
             dist = np.linalg.norm(pred_arr - gt_arr)
             norm_dist = dist / np.sqrt(2)
 
             distances.append(norm_dist)
-            sample[distance_field] = float(norm_dist)
+            sample[metric_field] = float(norm_dist)
             sample.save()
 
         if not distances:
@@ -81,10 +99,8 @@ class NormalizedClickDistance(foo.EvaluationMetric):
             "num_samples": len(distances),
         }
 
-        # Accuracy at thresholds
         for thresh in thresholds:
-            key = f"acc@{thresh*100:.1f}pct"
-            metrics[key] = float(np.mean(distances <= thresh))
+            metrics[f"acc@{thresh*100:.1f}%"] = float(np.mean(distances <= thresh))
 
         return metrics
 
