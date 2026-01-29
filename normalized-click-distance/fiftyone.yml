@@ -1,0 +1,9 @@
+name: normalized-click-distance
+version: 0.1.0
+description: Normalized Euclidean distance metric for click point evaluation
+authors:
+  - Harpreet Sahota
+fiftyone:
+  version: ">=0.25"
+operators:
+  - NormalizedClickDistance
