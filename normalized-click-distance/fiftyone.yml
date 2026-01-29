@@ -1,4 +1,4 @@
-name: "@harpreetsahota/normalized-click-distance"
+name: "@harpreetsahota/normalized_click_distance"
 version: 0.1.0
 url: "https://github.com/harpreetsahota204/odsc_workshop_visual_agents/tree/main/normalized-click-distance"
 description: Normalized Euclidean distance metric for GUI agent click point evaluation
