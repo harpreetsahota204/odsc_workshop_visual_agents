@@ -1,0 +1,8 @@
+fiftyone
+gdown
+transformers<5.0
+open-clip-torch
+umap-learn
+numpy
+sentence-transformers
+huggingface-hub
